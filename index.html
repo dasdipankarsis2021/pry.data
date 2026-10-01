@@ -66,7 +66,8 @@ import {getFirestore,doc,onSnapshot,setDoc,serverTimestamp} from "https://www.gs
 const firebaseConfig={apiKey:"AIzaSyCX7QnBQPYnSqAIrdDcNUWuZOIL9sFk21U",authDomain:"taldangra-circle.firebaseapp.com",projectId:"taldangra-circle",storageBucket:"taldangra-circle.firebasestorage.app",messagingSenderId:"923233575990",appId:"1:923233575990:web:d87eac97ade890fcab2497"};
 const ADMINS=['dasdipankarsis2021@gmail.com'];
 const fb=initializeApp(firebaseConfig),auth=getAuth(fb),db=getFirestore(fb),ref=doc(db,'taldangra','teachers');
-const EX=[['enr','Enrollment'],['empid','Employee ID'],['hra','HRA'],['ma','MA'],['acad','Academic qualification'],['train','Training qualification'],['tet','TET'],['sb','Service book'],['remarks','Remarks']];
+const EX=[['enr','Enrollment'],['village','Address (Village)'],['gp','Address (G.P.)'],['po','Address (P.O.)'],['dist','Address (District)'],['pin','Address (PIN)'],['empid','Employee ID'],['hra','HRA'],['ma','MA'],['acad','Academic qualification'],['train','Training qualification'],['tet','TET'],['sb','Service book'],['leave','Leave records of staff'],['remarks','Remarks']];
+const SCH=['enr','village','gp','po','dist','pin'];
 const $=s=>document.querySelector(s);
 let rows=[],edit=null,F={},modal=null,isAdmin=false,user=null;
 const DN={HT:'Head Teacher',AT:'Assistant Teacher',PT:'Para Teacher'};
@@ -87,7 +88,7 @@ return'<table><thead><tr>'+H.map(h=>'<th>'+h+'</th>').join('')+(del?'<th>Remove<
 return`<tr data-id="${r.id}" class="${miss(r)?'inc':''}"><td>${S[r.school]}</td><td>${esc(r.school)}</td><td>${esc(r.name)}</td><td>${esc(r.desig)}</td><td>${esc(r.phone)||'-'}</td><td>${fmt(r.dob)}</td><td>${fmt(r.doj)}</td><td>${fmt(d.y10)}</td><td>${fmt(d.y18)}</td><td>${fmt(d.y20)}</td><td class="${soon?'soon':''}">${fmt(d.dor)}</td><td>${remain(d.dor)}</td>${EX.map(e=>`<td>${esc(r[e[0]])||'-'}</td>`).join('')}${del?`<td><button class="rm" data-del="${r.id}" title="Delete this record">Delete</button></td>`:''}</tr>`}).join('')+'</tbody></table>'}
 const match=(r,q)=>!q||norm(r.name+' '+r.school+' '+r.phone).includes(norm(q));
 function start(){render();clearForm()}
-const fillEnr=()=>{const m={};rows.forEach(r=>{if(r.enr&&!m[r.school])m[r.school]=r.enr});rows.forEach(r=>{if(!r.enr&&m[r.school])r.enr=m[r.school]})};
+const fillEnr=()=>{SCH.forEach(k=>{const m={};rows.forEach(r=>{if(r[k]&&!m[r.school])m[r.school]=r[k]});rows.forEach(r=>{if(!r[k]&&m[r.school])r[k]=m[r.school]})})};
 const persist=async()=>{if(!isAdmin)return toast('View-only account: changes are not saved.');fillEnr();const data=JSON.parse(JSON.stringify(rows));if(JSON.stringify(data).length>950000)return toast('Data too large for one Firebase document.');
 try{await setDoc(ref,{rows:data,count:data.length,updatedBy:user.email,updatedAt:serverTimestamp()})}catch(e){toast(e.code==='permission-denied'?'Permission denied. Check Firestore rules and admin email.':'Save failed: '+e.message)}};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));['entry','dash','imp','set'].forEach(v=>$('#v-'+v).hidden=v!==b.dataset.v);render()});
@@ -113,7 +114,7 @@ $('#b-save').onclick=()=>{const r={school:$('#f-school').value.trim().toUpperCas
 if(!r.school||!r.name)return toast('Enter the school name and staff name.');if(r.phone&&!/^\d{10}$/.test(r.phone))return toast('Contact no. must be 10 digits.');
 if(edit){const o=rows.find(x=>x.id===edit);if(o.school!==r.school){rows=rows.filter(x=>x!==o);ins({...o,...r})}else Object.assign(o,r)}
 else{if(rows.some(x=>norm(x.name)===norm(r.name)&&norm(x.school)===norm(r.school))&&!confirm('This teacher already exists in this school. Add again?'))return;r.id=Math.max(0,...rows.map(x=>x.id))+1;ins(r)}
-if(r.enr)rows.forEach(x=>{if(x.school===r.school)x.enr=r.enr});persist();toast('Record saved.');clearForm();render()};
+SCH.forEach(k=>{if(r[k])rows.forEach(x=>{if(x.school===r.school)x[k]=r[k]})});persist();toast('Record saved.');clearForm();render()};
 function ins(r){let i=-1;rows.forEach((x,k)=>{if(x.school===r.school)i=k});i<0?rows.push(r):rows.splice(i+1,0,r)}
 $('#b-del').onclick=()=>{if(confirm('Delete this record permanently?')){rows=rows.filter(x=>x.id!==edit);persist();clearForm();render();toast('Record deleted.')}};
 $('#b-view').onclick=()=>flash(rows.find(x=>x.id===edit));
@@ -141,10 +142,10 @@ const toIso=v=>{if(v==null||v==='')return'';if(typeof v==='number'){const o=XLSX
 let pend=[];
 $('#xf').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const wb=XLSX.read(fr.result,{type:'array'}),a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
 const hi=a.findIndex(r=>r.some(c=>/name of the staff/i.test(String(c))));if(hi<0)return $('#ipv').innerHTML='<p class="err">Could not find the header row (Name of the Staff). Use the same layout as the original file.</p>';
-const h=a[hi].map(c=>String(c).toLowerCase()),ix=re=>h.findIndex(c=>re.test(c)),C={s:ix(/school/),n:ix(/staff/),g:ix(/design/),p:ix(/contact/),b:ix(/^dob/),j:ix(/joining/),e:ix(/enroll/),i:ix(/employee/),hra:ix(/^hra/),ma:ix(/^ma$/),ac:ix(/academic/),tr:ix(/training/),t:ix(/^tet/),sb:ix(/service book/),rm:ix(/remark/)};
+const h=a[hi].map(c=>String(c).toLowerCase()),ix=re=>h.findIndex(c=>re.test(c)),C={s:ix(/school/),n:ix(/staff/),g:ix(/design/),p:ix(/contact/),b:ix(/^dob/),j:ix(/joining/),e:ix(/enroll/),vl:ix(/village/),gp:ix(/g\.p/),po:ix(/p\.o/),ds:ix(/district/),pn:ix(/\(pin\)/),lv:ix(/leave/),i:ix(/employee/),hra:ix(/^hra/),ma:ix(/^ma$/),ac:ix(/academic/),tr:ix(/training/),t:ix(/^tet/),sb:ix(/service book/),rm:ix(/remark/)};
 let sc='';const all=[];let seen=0;
-a.slice(hi+1).forEach(r=>{if(String(r[C.s]).trim())sc=String(r[C.s]).trim().toUpperCase();const n=String(r[C.n]).trim().toUpperCase();if(!n||n==='ABC')return;seen++;const v=i=>i<0?'':String(r[i]==null?'':r[i]).trim().toUpperCase(),g=v(C.g);
-all.push({school:sc,name:n,desig:/^HT$|HEAD/.test(g)?'HT':/^PT$|PARA/.test(g)?'PT':'AT',phone:String(r[C.p]).replace(/\D/g,''),dob:toIso(r[C.b]),doj:toIso(r[C.j]),enr:v(C.e),empid:v(C.i),hra:v(C.hra),ma:v(C.ma),acad:v(C.ac),train:v(C.tr),tet:v(C.t),sb:v(C.sb),remarks:v(C.rm)})});
+a.slice(hi+1).forEach(r=>{if(String(r[C.s]).trim())sc=String(r[C.s]).trim().toUpperCase();const n=String(r[C.n]).trim().toUpperCase();if(!n||n==='ABC')return;seen++;const v=i=>{const t=i<0?'':String(r[i]==null?'':r[i]).trim().toUpperCase();return /^ADDRESS \(/.test(t)?'':t},g=v(C.g);
+all.push({school:sc,name:n,desig:/^HT$|HEAD/.test(g)?'HT':/^PT$|PARA/.test(g)?'PT':'AT',phone:String(r[C.p]).replace(/\D/g,''),dob:toIso(r[C.b]),doj:toIso(r[C.j]),enr:v(C.e),empid:v(C.i),hra:v(C.hra),ma:v(C.ma),acad:v(C.ac),train:v(C.tr),tet:v(C.t),sb:v(C.sb),remarks:v(C.rm),village:v(C.vl),gp:v(C.gp),po:v(C.po),dist:v(C.ds),pin:v(C.pn),leave:v(C.lv)})});
 pend=all;const have=new Set(rows.map(r=>norm(r.name)+'|'+norm(r.school))),nw=all.filter(r=>!have.has(norm(r.name)+'|'+norm(r.school))).length;
 $('#ipv').innerHTML=`<p><b>${seen}</b> teachers read: <span class="ok">${nw} new</span>, ${seen-nw} already in the database (will be updated).</p><div class="tw" style="max-height:40vh">${tbl(all.map((r,i)=>({...r,id:-i-1})))}</div><div class="bt"><button id="addn">Update existing + add new</button><button class="g d" id="repn">Replace everything with this Excel (${seen})</button></div>`;
 $('#addn').onclick=async()=>{let id=Math.max(0,...rows.map(x=>x.id));pend.forEach(r=>{const o=rows.find(x=>norm(x.name)===norm(r.name)&&norm(x.school)===norm(r.school));if(o)Object.entries(r).forEach(([k,val])=>{if(val!=='')o[k]=val});else ins({...r,id:++id})});await persist();render();$('#ipv').innerHTML='<p class="ok">Excel data saved to Firebase.</p>'};
@@ -169,7 +170,7 @@ if(jmode==='replace'){if(!confirm('Replace all data on this computer with '+list
 const have=new Set(rows.map(r=>norm(r.name)+'|'+norm(r.school)));let id=Math.max(0,...rows.map(x=>x.id)),add=0;list.forEach(r=>{const k=norm(r.name)+'|'+norm(r.school);if(have.has(k))return;have.add(k);r.id=++id;ins(r);add++});
 persist();render();toast(add+' new records added, '+(list.length-add)+' already present'+(bad?', '+bad+' skipped.':'.'))}catch(err){toast(err.message)}};fr.readAsText(f);e.target.value=''};
 
-$('#v-entry .fg').insertAdjacentHTML('beforeend',EX.map(e=>`<label>${e[0]==='enr'?'Enrollment (school)':e[1]}<input id="f-${e[0]}"></label>`).join(''));
+$('#v-entry .fg').insertAdjacentHTML('beforeend',EX.map(e=>`<label>${SCH.includes(e[0])?e[1]+' (school)':e[1]}<input id="f-${e[0]}"></label>`).join(''));
 document.querySelectorAll('nav [data-v=imp],nav [data-v=set],#v-entry>.pnl:first-child').forEach(e=>e.classList.add('adm'));
 const ERR=c=>({'auth/invalid-credential':'Wrong email or password.','auth/invalid-email':'Enter a valid email address.','auth/too-many-requests':'Too many attempts. Wait a while or reset the password.','auth/unauthorized-domain':'This website address is not in Firebase Authorized domains.','auth/network-request-failed':'No internet connection.'}[c]||'Sign-in failed ('+c+').');
 $('#lf').onsubmit=async e=>{e.preventDefault();$('#le').textContent='';try{await signInWithEmailAndPassword(auth,$('#le-m').value.trim(),$('#le-p').value)}catch(x){$('#le').textContent=ERR(x.code)}};
